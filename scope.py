@@ -2,7 +2,6 @@
 import argparse
 import requests
 import ipaddress
-import json
 import sys
 import os
 
@@ -10,63 +9,81 @@ import os
 # Constants
 # -----------------------------------------------
 
-rdap_url = "https://rdap.arin.net/registry/ip/"
+RDAP_BASE_URL = "https://rdap.arin.net/registry"
 
 # -----------------------------------------------
 # Functions
 # -----------------------------------------------
 
+
 def log_out(message):
+	"""
+	Takes a string and writes it to stdout
+	"""
 	sys.stdout.write("[+] %s\n"  % message)
 
 
 def log_err(message):
+	"""
+	Takes a string and writes it to stderr
+	"""
 	sys.stderr.write("[-] %s\n" % message)
 
-def is_public_ip(ip):
-	try:
-		ip = ipaddress.IPv4Address(ip)
-		return ip.is_global
-	except ValueError as e:
-		log_err(e)
-		return False
+def is_public(target):
+	"""
+	Takes a string and returns True if is a public IP address or network in CIDR notation
+	"""
+	ret = False
+	if "/" in target:
+		try:
+			net = ipaddress.IPv4Network(target)
+			ret =  net.is_global
+		except ValueError as e:
+			log_err(e)
+	else:
+		try:
+			ip = ipaddress.IPv4Address(target)
+			ret =  ip.is_global
+		except ValueError as e:
+			log_err(e)
+	return ret
 		
-def is_public_network(net):
-	try:
-		net = ipaddress.IPv4Network(net)
-		return net.is_global
-	except ValueError as e:
-		log_err(e)
-		return False
-
 
 def load_targets_file(input_file):
+	"""
+	Takes a string indicating a file name and reads the contents of the file.
+	Returns a list containing each line of the file.
+	Precondition: input_file should exist in the file system.
+	"""
 	with open(input_file, 'r') as f:
 		f = f.readlines()
 	out = [i.replace('\n','').replace('\r','') for i in f]
 	return out
 
 def parse_targets(targets):
+	"""
+	Takes a list containing strings and returns another list i
+	containing the values from the input list that matched a public IP address or network.
+	"""
 	out_targets = list()
 	for target in targets:
-		if "/" in target:
-			if is_public_network(target):
-				out_targets.append(target)
-		else:
-			if is_public_ip(target):
-				out_targets.append(target)
+		if is_public(target):
+			out_targets.append(target)
 			
 	return out_targets
 
-def query_rdap(target, rdap_url):
-	url = rdap_url + target
+def query_rdap(target):
+	"""
+	Queries Whois information from the RDAP_BASE_URL and returns a JSON object
+	"""
+	url = RDAP_BASE_URL +"/ip/"+ target
 	r = requests.get(url)
-	return r.text
+	return r.json()
 
 
 def get_owner(rdap_data):
-	data = json.loads(rdap_data)
-	return data['entities'][0]['vcardArray'][1][1][-1]
+	return rdap_data['entities'][0]['vcardArray'][1][1][-1]
+
 
 # -----------------------------------------------
 # Main
@@ -90,6 +107,6 @@ if __name__ == "__main__":
 
 	targets = parse_targets(targets)
 	for target in targets:
-		rdap_data = query_rdap(target, rdap_url)
-		message = "Target: %s belongs to: %s" % (target, get_owner(rdap_data))
+		rdap_data = query_rdap(target)
+		message = "Target: %s is registered under %s" % (target, get_owner(rdap_data))
 		log_out(message)
