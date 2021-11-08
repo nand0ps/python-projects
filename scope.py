@@ -4,6 +4,7 @@ import requests
 import ipaddress
 import sys
 import os
+from log import *
 
 # -----------------------------------------------
 # Constants
@@ -16,19 +17,6 @@ RDAP_BASE_URL = "https://rdap.arin.net/registry"
 # -----------------------------------------------
 
 
-def log_out(message):
-	"""
-	Takes a string and writes it to stdout
-	"""
-	sys.stdout.write("[+] %s\n"  % message)
-
-
-def log_err(message):
-	"""
-	Takes a string and writes it to stderr
-	"""
-	sys.stderr.write("[-] %s\n" % message)
-
 def is_public(target):
 	"""
 	Takes a string and returns True if is a public IP address or network in CIDR notation
@@ -39,13 +27,13 @@ def is_public(target):
 			net = ipaddress.IPv4Network(target)
 			ret =  net.is_global
 		except ValueError as e:
-			log_err(e)
+			log_stderr(e)
 	else:
 		try:
 			ip = ipaddress.IPv4Address(target)
 			ret =  ip.is_global
 		except ValueError as e:
-			log_err(e)
+			log_stderr(e)
 	return ret
 		
 
@@ -101,7 +89,7 @@ if __name__ == "__main__":
 		if os.path.exists(args.input_file):
 			targets = load_targets_file(args.input_file)
 		else:
-			log_err("Targets file does not exist")
+			log_stderr("Targets file does not exist")
 	else:
 		targets = args.target
 
@@ -109,4 +97,4 @@ if __name__ == "__main__":
 	for target in targets:
 		rdap_data = query_rdap(target)
 		message = "Target: %s is registered under %s" % (target, get_owner(rdap_data))
-		log_out(message)
+		log_stdout(message)
